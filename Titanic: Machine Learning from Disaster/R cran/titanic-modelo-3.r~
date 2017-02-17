@@ -1,0 +1,80 @@
+################################
+#  Modelado 3: 	Competición https://www.kaggle.com/c/titanic
+#		Basado en https://www.kaggle.com/mrisdal/titanic/exploring-survival-on-the-titanic
+################################
+
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+library(ggplot2)
+library(randomForest)
+
+###
+# Datasets
+###
+
+# Carga de datos
+train_url <- "../data/train.csv"
+train <- read.csv(train_url)
+  
+test_url <- "../data/test.csv"
+test <- read.csv(test_url)
+
+# Rellenamos los valores de embarque vacios con una predicción
+rpart_tree_embark <- rpart(Embarked ~ Pclass + SibSp + Parch + Fare, data = train, method = "class")
+predict_embark <- predict(rpart_tree_embark, newdata = train[train$Embarked == "",], type = "class")
+train$Embarked[strtoi(labels(predict_embark))] <- predict_embark
+
+# Rellenamos los valores de edad vacios con una predicción
+rpart_tree_age <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked, data = train, method = "anova")
+predict_age <- predict(rpart_tree_age, newdata = train[is.na(train$Age),])
+train$Age[strtoi(labels(predict_age))] <- predict_age
+
+rpart_tree_survived <- rpart(Survived ~ Pclass + Age + Sex + SibSp + Parch + Fare, data = train, method = "class")
+rpart.plot(rpart_tree_survived)
+forest_tree <- randomForest(as.factor(Survived) ~ Pclass + Age + Sex + SibSp + Parch + Fare, data = train, importance=TRUE, ntree = 2000)
+varImpPlot(forest_tree)
+plot(forest_tree)
+
+# Agregamos el titutlo del pasajero
+train$Title <- titles(train);
+
+rpart_tree_survived <- rpart(Survived ~ Pclass + Age + Sex + SibSp + Parch + Fare + Title, data = train, method = "class")
+rpart.plot(rpart_tree_survived)
+forest_tree <- randomForest(as.factor(Survived) ~ Pclass + Age + Sex + SibSp + Parch + Fare + Title, data = train, importance=TRUE, ntree = 2000)
+varImpPlot(forest_tree)
+plot(forest_tree)
+
+# Agregamos el tamaño de la familia
+train$Fsize <- train$Parch + train$SibSp + 1
+
+rpart_tree_survived <- rpart(Survived ~ Pclass + Age + FSize + Fare + Title, data = train, method = "class")
+rpart.plot(rpart_tree_survived)
+forest_tree <- randomForest(as.factor(Survived) ~ Pclass + Age + Sex + SibSp + Parch + Fare + Title, data = train, importance=TRUE, ntree = 2000)
+varImpPlot(forest_tree)
+plot(forest_tree)
+
+##
+# Funciones!
+##
+
+# 	Creamos una nueva variable donde podamos tener el valor del titulo de la persona.
+#	Algunos titulos estarán repetidos así que los agruparemos donde corresponden.
+#	Se crea una categoria Other para los titulos nobliarios
+#	Los reverendos Rev y doctores Dr se dejan a parte
+titles <- function(dataset){
+	titles <- gsub('(.*, )|(\\..*)', '', dataset$Name)
+
+	titles[titles == 'Mlle'] <- 'Miss' 
+	titles[titles == 'Ms'] <- 'Miss'
+	titles[titles == 'Mme'] <- 'Mrs'
+
+	other <- c('Jonkheer', 'the Countess', 'Don', 'Dona', 'Capt', 'Col', 'Sir', 'Lady', 'Major')
+	titles[titles %in% other] <- 'Other' 
+
+	titles <- factor(titles, labels = labels(table(titles))[[1]])
+
+	return(titles)
+}
+

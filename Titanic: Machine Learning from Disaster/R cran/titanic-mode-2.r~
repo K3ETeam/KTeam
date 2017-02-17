@@ -1,0 +1,102 @@
+################################
+#  Modelado 1: 	Competición https://www.kaggle.com/c/titanic
+#		Basado en https://www.kaggle.com/mrisdal/titanic/exploring-survival-on-the-titanic
+#
+################################
+
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(randomForest)
+
+###
+# Datasets
+###
+
+# Import the training set: train
+train_url <- "../data/train.csv"
+train <- read.csv(train_url)
+  
+# Import the testing set: test
+test_url <- "../data/test.csv"
+test <- read.csv(test_url)
+
+# Unimos los dos conjuntos para tratar los datos y despues los separaremos de nuevo
+full <- rbind(train[,!(names(train) %in% c("Survived"))], test);
+
+###
+# 1.- 	Buscamos las debilidades del conjunto de entrenamiento. 
+#	Encontramos que para las variables Age y Embarked existen algunas filas que no tienen valor.
+#	Se les asignará un valor inferido por el mismo conjunto.
+###
+
+rpart_tree_embark <- rpart(Embarked ~ Pclass + SibSp + Parch + Fare, data = full, method = "class")
+predict_embark <- predict(rpart_tree_embark, newdata = full[full$Embarked == "",], type = "class")
+full$Embarked[strtoi(labels(predict_embark))] <- predict_embark
+
+rpart_tree_age <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked, data = full, method = "anova")
+predict_age <- predict(rpart_tree_age, newdata = full[is.na(full$Age),])
+full$Age[strtoi(labels(predict_age))] <- predict_age
+
+rpart_tree_fare <- rpart(Fare ~ Pclass + Sex + SibSp + Parch + Embarked + Age, data = full, method = "anova")
+predict_fare <- predict(rpart_tree_fare, newdata = full[is.na(full$Fare),])
+full$Fare[strtoi(labels(predict_fare))] <- predict_fare
+
+###
+# 2.-	Creamos una nueva variable donde podamos tener el valor del titulo de la persona.
+#	Algunos titulos estarán repetidos así que los agruparemos donde corresponden.
+#	Se crea una categoria Other para los titulos nobliarios
+#	Los reverendos Rev y doctores Dr se dejan a parte
+#
+###
+
+full$Title <- gsub('(.*, )|(\\..*)', '', full$Name)
+
+full$Title[full$Title == 'Mlle'] <- 'Miss' 
+full$Title[full$Title == 'Ms'] <- 'Miss'
+full$Title[full$Title == 'Mme'] <- 'Mrs'
+
+full$Title[full$Title == 'Jonkheer'] <- 'Other' 
+full$Title[full$Title == 'the Countess'] <- 'Other'
+full$Title[full$Title == 'Don'] <- 'Other'
+full$Title[full$Title == 'Dona'] <- 'Other'
+full$Title[full$Title == 'Capt'] <- 'Other'
+full$Title[full$Title == 'Col'] <- 'Other'
+full$Title[full$Title == 'Sir'] <- 'Other'
+full$Title[full$Title == 'Lady'] <- 'Other'
+full$Title[full$Title == 'Major'] <- 'Other'
+
+full$Title <- factor(full$Title, labels = labels(table(full$Title))[[1]])
+
+table(full$Title)
+ggplot(copy, aes(Title, fill=factor(Survived))) + geom_bar(position="dodge")
+
+full$Members <- full$Parch + full$SibSp + 1;
+quantile(full$Members)				# La mayoria de gente embarco sola
+
+#full$FCategory <- 'low'
+#full$FCategory <- 'medium';
+#full$FCategory <- 'hight';
+
+
+###
+# 3.-	Modelado, predicción y solución
+#	Acualizamos los datos de train y test con el conjunto full
+#	Salvamos los datos
+###
+
+copy <- full[train$PassengerId,];
+copy$Survived <- train$Survived;
+test <- full[test$PassengerId,];
+
+forest_tree <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Embarked + Title + Fare, data = copy, importance=TRUE)
+varImpPlot(forest_tree)
+plot(forest_tree)
+
+prediction <- predict(forest_tree, test)
+solution <- data.frame(PassengerID = test$PassengerId, Survived = prediction, check.names = FALSE)
+write.csv(solution, file = 'solution.csv', row.names = F)

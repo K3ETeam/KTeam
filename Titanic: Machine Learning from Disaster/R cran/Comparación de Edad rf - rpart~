@@ -1,0 +1,100 @@
+
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(randomForest)
+
+# Carga de datos
+train_url <- "../data/train.csv"
+train <- read.csv(train_url)
+  
+test_url <- "../data/test.csv"
+test <- read.csv(test_url)
+
+# Unimos los dos conjuntos para tratar los datos y despues los separaremos de nuevo
+full_1 <- rbind(train[,!(names(train) %in% c("Survived"))], test);
+full_2 <- rbind(train[,!(names(train) %in% c("Survived"))], test);
+
+aux <- full_1[!is.na(full_1$Age),]
+rf_age <- randomForest(Age ~ Pclass + Sex + SibSp + Parch + Embarked, data = aux, importance=TRUE, ntree = 500)
+aux <- full_1[is.na(full_1$Age),]
+prediction <- predict(rf_age, aux)
+full_1[labels(prediction),]$Age <- prediction
+full_1$Age <- round(full_1$Age)
+
+train_aux_1 <- full_1[train$PassengerId,]
+train_aux_1$Survived <- train$Survived
+
+aux <- full_2[!is.na(full_2$Age),]
+rpart_age <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Embarked, data = aux)
+aux <- full_2[is.na(full_2$Age),]
+prediction <- predict(rpart_age, aux)
+full_2[labels(prediction),]$Age <- prediction
+full_2$Age <- round(full_2$Age)
+
+train_aux_2 <- full_2[train$PassengerId,]
+train_aux_2$Survived <- train$Survived
+
+grid.arrange(
+ggplot(train_aux_1, aes(Age, fill = factor(Survived))) + geom_histogram() + facet_grid(.~Sex),
+ggplot(train_aux_2, aes(Age, fill = factor(Survived))) + geom_histogram() + facet_grid(.~Sex),
+ncol = 2)
+
+full_3 <- rbind(train[,!(names(train) %in% c("Survived"))], test);
+
+aux <- full_3[is.na(full_3$Age) & full_3$Pclass == 1,]
+prediction <- predict(rf_age, aux)
+full_3[labels(prediction),]$Age <- prediction
+full_3$Age <- round(full_3$Age)
+
+aux <- full_3[is.na(full_3$Age) & full_3$Pclass == 2,]
+prediction <- predict(rf_age, aux)
+full_3[labels(prediction),]$Age <- prediction
+full_3$Age <- round(full_3$Age)
+
+aux <- full_3[!is.na(full_3$Age),]
+rf_age <- randomForest(Age ~ Pclass + Sex + SibSp + Parch + Embarked, data = aux, importance=TRUE, ntree = 500)
+aux <- full_3[is.na(full_3$Age),]
+prediction <- predict(rf_age, aux)
+full_3[labels(prediction),]$Age <- prediction
+full_3$Age <- round(full_3$Age)
+
+train_aux_3 <- full_3[train$PassengerId,]
+train_aux_3$Survived <- train$Survived
+
+grid.arrange(
+ggplot(train_aux_1, aes(Age, fill = factor(Survived))) + geom_histogram() + facet_grid(.~Sex),
+ggplot(train_aux_3, aes(Age, fill = factor(Survived))) + geom_histogram() + facet_grid(.~Sex),
+ncol = 2)
+
+train_2 <- train
+
+aux <- train_2[!is.na(train_2$Age),]
+rf_age <- randomForest(Age ~ Pclass + Sex + SibSp + Parch + Embarked, data = aux, importance=TRUE, ntree = 500)
+
+aux <- train_2[is.na(train_2$Age) & train_2$Pclass == 1,]
+prediction <- predict(rf_age, aux)
+train_2[labels(prediction),]$Age <- prediction
+train_2$Age <- round(train_2$Age)
+
+aux <- train_2[is.na(train_2$Age) & train_2$Pclass == 2,]
+prediction <- predict(rf_age, aux)
+train_2[labels(prediction),]$Age <- prediction
+train_2$Age <- round(train_2$Age)
+
+aux <- train_2[!is.na(train_2$Age),]
+rf_age <- randomForest(Age ~ Pclass + Sex + SibSp + Parch + Embarked, data = aux, importance=TRUE, ntree = 500)
+aux <- train_2[is.na(train_2$Age),]
+prediction <- predict(rf_age, aux)
+train_2[labels(prediction),]$Age <- prediction
+train_2$Age <- round(train_2$Age)
+
+grid.arrange(
+ggplot(train_aux_1, aes(Age, fill = factor(Survived))) + geom_histogram() + facet_grid(.~Sex),
+ggplot(train_2, aes(Age, fill = factor(Survived))) + geom_histogram() + facet_grid(.~Sex),
+ncol = 2)
+
