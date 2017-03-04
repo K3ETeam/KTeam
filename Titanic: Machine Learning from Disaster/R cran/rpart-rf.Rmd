@@ -160,6 +160,7 @@ Now we're ready to start exploring missing data and rectifying it through imputa
 ## Sensible value imputation
 
 ```{r}
+
 # Passengers 62 and 830 are missing Embarkment
 full[c(62, 830), 'Embarked']
 ```
@@ -256,6 +257,16 @@ Things look good, let's check for empty values.
 
 # Show new number of missing Age values
 sum(is.na(full$Age))
+
+# Fill empty deck info with a default value 'Z'
+# Add 'Z' to Deck factor levels
+# levels(full$Deck)<- c(levels(full$Deck),'Z')
+# full$Deck[is.na(full$Deck)] <- 'Z'
+
+predicted_deck <- rpart(Deck ~ Pclass + Fare,
+                  data=full[!is.na(full$Deck),], 
+                  method="class")
+full$Deck[is.na(full$Deck)] <- predict(predicted_deck, full[is.na(full$Deck),], type = "class")
 ```
 
 We've finished imputing values for all variables that we care about for now! Now that we have a complete Age variable, there are just a few finishing touches I'd like to make. We can use Age to do just a bit more feature engineering ...
@@ -274,8 +285,8 @@ ggplot(full[1:891,], aes(Age, fill = factor(Survived))) +
   theme_few()
 
 # Create the column child, and indicate whether child or adult
-full$Child[full$Age < 18] <- 'Child'
-full$Child[full$Age >= 18] <- 'Adult'
+full$Child[full$Age < 21] <- 'Child'
+full$Child[full$Age >= 21] <- 'Adult'
 
 # Show counts
 table(full$Child, full$Survived)
@@ -316,6 +327,8 @@ Our first step is to split the data back into the original test and training set
 # Split the data back into a train set and a test set
 train <- full[1:891,]
 test <- full[892:1309,]
+trainEmpty <- full[1:891,]
+trainEmpty$Survived <- NA
 ```
 
 ## Building the model 
@@ -354,6 +367,9 @@ sum(is.na(full$Child))
 
 # Show number of missing Mother values
 sum(is.na(full$Mother))
+
+# Show number of missing Deck values
+sum(is.na(full$Deck))
 ```
 
 We then build our model using `randomForest` on the training set.
@@ -365,7 +381,7 @@ set.seed(754)
 # Build the model (note: not all possible variables are used)
 rf_model <- randomForest(factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + 
                                             Fare + Embarked + Title + 
-                                            FsizeD + Child + Mother,
+                                            FsizeD + Child + Deck,
                                             data = train)
 
 # Show model error
@@ -410,11 +426,27 @@ We're ready for the final step --- making our prediction! When we finish here, w
 # Predict using the test set
 prediction <- predict(rf_model, test)
 
+# Predict empty train set in order to check aproximate accuracy without kaggle submission
+predictionToCheck <- predict(rf_model, trainEmpty)
+
 # Save the solution to a dataframe with two columns: PassengerId and Survived (prediction)
 solution <- data.frame(PassengerID = test$PassengerId, Survived = prediction)
 
+# Save empty train solution to a dataframe with two columns: PassengerId and Survived (prediction)
+solutionToCheck <- data.frame(PassengerID = train$PassengerId, Survived = predictionToCheck)
+
 # Write the solution to file
+solution_check_path <- 'rpart-rf_Solution_check.csv'
 write.csv(solution, file = 'rpart-rf_Solution.csv', row.names = F)
+write.csv(solutionToCheck, file = solution_check_path, row.names = F)
+```
+
+# Train Check
+## Accuracy
+```{r}
+source("accuracy.R")
+accuracy <- evaluateAccuracy(solution_check_path)
+accuracy
 ```
 
 # Conclusion
